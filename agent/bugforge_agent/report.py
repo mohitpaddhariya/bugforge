@@ -127,11 +127,16 @@ def build(cfg, ticket: str, mode: str = "fix",
         st.phase("closed_no_change")
 
     else:
+        # A reviewer may be opening this cold — from a link, with no idea what the
+        # project is or that an agent wrote it. Lead with orientation, not with the
+        # root cause, or the first thing they read is a line number for a file they
+        # have never seen.
+        preamble = d.get("context_preamble", "")
         secondary = d.get("secondary_findings") or []
         sec_md = "\n\n".join(
             f"**{s.get('file', '?')}** — {s.get('issue', '')}" for s in secondary
         ) or "_(none)_"
-        md = f"""# fix: {d.get('fix_summary', subject)} (#{ticket})
+        md = f"""{preamble}# fix: {d.get('fix_summary', subject)} (#{ticket})
 
 **Root cause**
 {hypothesis}

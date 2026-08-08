@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -145,7 +146,19 @@ class GithubVcs(VcsAdapter):
                 "_repo": str(repo)}
 
     # GitHub has no public attachment-upload endpoint, so evidence rides on the
-    # branch instead (commit_assets) and the body uses repo-relative links.
+    # branch instead. Relative links in a PR body resolve against the DEFAULT
+    # branch, where these files do not exist — so they must be absolute raw
+    # URLs pinned to the head branch.
+
+    def commit_assets(self, repo, branch, paths):
+        rel = super().commit_assets(repo, branch, paths)
+        origin = git(repo, "remote", "get-url", "origin", check=False)
+        m = re.search(r"github\.com[:/](?P<slug>[^/]+/[^/.]+)", origin or "")
+        if not m:
+            return rel
+        slug = m.group("slug")
+        return {k: f"https://raw.githubusercontent.com/{slug}/{branch}/{v}"
+                for k, v in rel.items()}
 
     def update_pr_body(self, pr, body):
         import tempfile
