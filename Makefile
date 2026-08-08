@@ -78,3 +78,9 @@ clean: ## Stop everything and delete volumes (destroys the database)
 
 test:  ## Run the api test suite
 	docker compose exec -T api python -m pytest /srv/tests -q
+
+reset-code:  ## Discard the agent's edits and return to the scenario baseline
+	git -C . reset --hard HEAD
+	git -C . clean -fd api/tests scripts
+
+reset-all: reset-code reset  ## Restore both code and data

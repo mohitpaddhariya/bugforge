@@ -131,6 +131,10 @@ class Ctx:
         races cannot be hit through step-by-step UI actions."""
         headers = {"X-Trace-Id": trace_id or self.new_trace(),
                    "X-Session-Id": self.rec.session_id}
+        if json_body is not None:
+            # Without this the body arrives as text/plain, the server cannot
+            # parse it, and every authenticated call afterwards is a 401.
+            headers["content-type"] = "application/json"
         resp = await self.context.request.fetch(
             f"{self.api_url}{path}", method=method, headers=headers,
             data=json_body if json_body is None else json.dumps(json_body),
