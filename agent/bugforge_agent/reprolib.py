@@ -23,6 +23,7 @@ import asyncio
 import json
 import re
 import secrets
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -92,7 +93,9 @@ class Ctx:
     written against this keep working as the store changes."""
 
     def __init__(self, page, context, rec: Recording, base_url: str,
-                 api_url: str, persona: str, password: str = "password123"):
+                 api_url: str, persona: str, password: str = "password123",
+                 playwright: Any = None):
+        self._pw = playwright
         self.page = page
         self.context = context
         self.rec = rec
@@ -148,6 +151,37 @@ class Ctx:
         self.rec.requests.append(out)
         return out
 
+    async def rival(self, email: str, password: str = "password123"):
+        """An independent logged-in API session for a *second* shopper.
+
+        Racing two requests from the same browser context would mean logging in
+        as the rival and clobbering the first shopper's cookie. Concurrency
+        between two real users needs two real sessions.
+
+        Returns an async ``call(method, path, json_body=None)``.
+        """
+        rq = await self._pw.request.new_context(base_url=self.api_url)
+        await rq.post("/api/auth/login",
+                      data=json.dumps({"email": email, "password": password}),
+                      headers={"content-type": "application/json"})
+        # Warm the connection. A fresh context pays TCP setup on its first real
+        # call, which is enough to lose every race it is supposed to contend.
+        await rq.get("/api/me")
+
+        async def call(method: str, path: str, json_body: Any = None):
+            headers = {"X-Trace-Id": self.new_trace(),
+                       "X-Session-Id": self.rec.session_id}
+            if json_body is not None:
+                headers["content-type"] = "application/json"
+            resp = await rq.fetch(path, method=method, headers=headers,
+                                  data=None if json_body is None else json.dumps(json_body))
+            out = {"method": method, "url": f"{self.api_url}{path}",
+                   "status": resp.status, "body": None}
+            self.rec.requests.append(out)
+            return out
+
+        return call
+
     async def parallel(self, *coros):
         """Fire several things genuinely at once. Required for race conditions."""
         return await asyncio.gather(*coros, return_exceptions=True)
@@ -161,6 +195,10 @@ async def execute(module, *, label: str, out_dir: Path, base_url: str,
     from playwright.async_api import async_playwright
 
     out_dir = Path(out_dir) / label
+    # Start clean: Playwright names each video after the page, so re-runs
+    # accumulate files and a later step cannot tell which one is current.
+    if out_dir.exists():
+        shutil.rmtree(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     vw, vh = viewport or getattr(module, "VIEWPORT", (1440, 900))
@@ -196,7 +234,7 @@ async def execute(module, *, label: str, out_dir: Path, base_url: str,
 
         page.on("response", _on_response)
 
-        ctx = Ctx(page, context, rec, base_url, api_url, persona)
+        ctx = Ctx(page, context, rec, base_url, api_url, persona, playwright=pw)
 
         error = None
         try:

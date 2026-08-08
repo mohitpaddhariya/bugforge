@@ -19,9 +19,41 @@ def have_ffmpeg() -> bool:
     return shutil.which("ffmpeg") is not None
 
 
+def _duration_seconds(src: Path) -> float | None:
+    """Real duration, decoded rather than read from the header.
+
+    Playwright's webm carries no reliable duration metadata, which makes
+    ``-sseof`` seek to the wrong place — it silently produced a GIF of the
+    login page instead of the ending. Counting packets is slower and correct.
+    """
+    if not shutil.which("ffprobe"):
+        return None
+    for args in (
+        ["-v", "error", "-show_entries", "format=duration",
+         "-of", "default=nw=1:nk=1", str(src)],
+        ["-v", "error", "-count_packets", "-select_streams", "v:0",
+         "-show_entries", "stream=duration", "-of", "default=nw=1:nk=1", str(src)],
+    ):
+        try:
+            out = subprocess.run(["ffprobe", *args], capture_output=True,
+                                 text=True, timeout=60).stdout.strip().splitlines()
+            for line in out:
+                value = float(line)
+                if value > 0:
+                    return value
+        except (ValueError, subprocess.SubprocessError):
+            continue
+    return None
+
+
 def webm_to_gif(src: Path, dst: Path, *, width: int = 720, fps: int = 10,
-                max_seconds: int | None = 20) -> dict[str, Any]:
+                max_seconds: int | None = 24, tail: bool = True) -> dict[str, Any]:
     """Two-pass palette conversion — a one-pass GIF of a UI recording looks like mud.
+
+    ``tail=True`` takes the LAST ``max_seconds`` rather than the first. A
+    reproduction spends most of its runtime on setup; the frames worth showing
+    are the ones at the end, where the symptom either appears or does not.
+    Trimming from the front produces a GIF of the login page.
 
     Retries at progressively lower fidelity if the result is too large to embed.
     """
@@ -39,7 +71,14 @@ def webm_to_gif(src: Path, dst: Path, *, width: int = 720, fps: int = 10,
 
     for w, f in ladder:
         vf = f"fps={f},scale={w}:-1:flags=lanczos"
-        trim = ["-t", str(max_seconds)] if max_seconds else []
+        if max_seconds and tail:
+            duration = _duration_seconds(src)
+            start = max(0.0, (duration or 0.0) - max_seconds)
+            trim = ["-ss", f"{start:.2f}", "-t", str(max_seconds)]
+        elif max_seconds:
+            trim = ["-t", str(max_seconds)]
+        else:
+            trim = []
         try:
             subprocess.run(
                 ["ffmpeg", "-y", "-loglevel", "error", *trim, "-i", str(src),
@@ -75,7 +114,8 @@ def collect(run_dir: Path) -> dict[str, Any]:
     run_dir = Path(run_dir)
     out: dict[str, Any] = {"gifs": {}, "problems": []}
     for label in ("before", "after"):
-        videos = sorted((run_dir / label / "video").glob("*.webm"))
+        videos = sorted((run_dir / label / "video").glob("*.webm"),
+                        key=lambda v: v.stat().st_mtime, reverse=True)
         if not videos:
             out["problems"].append(f"no {label} video — was `bf repro run --label {label}` run?")
             continue
