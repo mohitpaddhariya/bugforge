@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Ticket not found{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1 data-testid="not-found-title">No such ticket</h1>
+</div>
+<p class="muted" data-testid="not-found-message">
+  There is no ticket <span class="mono">#{{ ticket_id }}</span> in the queue.
+</p>
+<a class="back" href="/" data-testid="not-found-back">&larr; back to queue</a>
+{% endblock %}

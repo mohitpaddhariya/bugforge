@@ -1,0 +1,137 @@
+id: BUG-001
+title: Coupon usage counter race condition (TOCTOU) at checkout
+ticket: 1042
+layer: backend
+class: concurrency
+severity: high
+flags:
+  BUG_COUPON_TOCTOU: true
+  BUG_CHECKOUT_SWALLOWS_ERROR: true
+
+symptom:
+  user_visible: "Place Order spins forever, no error shown, no confirmation"
+  http: "POST /api/checkout -> 500 (IntegrityError on shop.coupons CHECK (uses <= max_uses))"
+  backend_logs: true
+  frontend_logs: true
+  notes: >
+    Two defects stacked on one ticket. The backend defect produces the 500;
+    the frontend defect converts a 500 into "it just spins", which is why the
+    customer retried three times. A robot that fixes only the race has fixed
+    the outage but not the ticket.
+
+answer_sheet:
+  files:
+    - path: api/app/routers/checkout.py
+      anchor: "flags.is_enabled(flags.BUG_COUPON_TOCTOU)"
+      anchor_alternatives:
+        - "def _redeem_coupon"
+        - "coupon.uses = coupon.uses + 1"
+        - "coupon.uses + 1"
+      lines: null   # null by design: written before the code. A later pass resolves
+                    # the anchor to concrete line numbers. Do not hand-guess them.
+      role: primary
+      why: >
+        The buggy branch SELECTs the coupon row with a plain read, computes
+        uses + 1 in Python, then UPDATEs. There is no row-level lock and no
+        atomic SQL increment, so two concurrent checkouts read uses=4 and both
+        write uses=5 -> the second commit violates
+        CHECK (uses <= max_uses) and raises IntegrityError.
+
+  root_cause: >
+    Read-modify-write on shop.coupons.uses without row-level locking. The
+    checkout handler reads the coupon, evaluates uses < max_uses in application
+    code, and writes back uses + 1 in a separate statement. Between the read and
+    the write another transaction performs the same read, so the check is made
+    against stale state (time-of-check / time-of-use). Under concurrency the
+    second UPDATE commits a value that violates the table's
+    CHECK (uses <= max_uses) constraint and the request fails with a 500.
+    SAVE20 is seeded at uses=4 of max_uses=5, so exactly one concurrent pair
+    reaches the boundary.
+
+  correct_fix: >
+    Serialise the redemption. Either (a) re-read the coupon row inside the
+    checkout transaction with SELECT ... FOR UPDATE before evaluating
+    uses < max_uses and incrementing, or (b) perform a single conditional atomic
+    UPDATE — UPDATE shop.coupons SET uses = uses + 1 WHERE id = :id AND
+    uses < max_uses — and treat rowcount = 0 as "coupon exhausted", returning a
+    400 with a coupon_exhausted code rather than letting the constraint fire.
+    Either way the loser of the race must receive a clean 4xx with a domain
+    error, never a 500. Catching IntegrityError and retyping it as a 400 is NOT
+    an acceptable fix on its own: it hides the race and still double-counts
+    under other orderings.
+
+  incorrect_fixes:
+    - "Removing or relaxing the CHECK (uses <= max_uses) constraint"
+    - "Wrapping the increment in try/except IntegrityError and returning 400 with no locking"
+    - "Adding a retry loop around checkout without serialising the read"
+    - "Raising max_uses on SAVE20 in the seed"
+    - "Only fixing the frontend spinner and declaring the ticket resolved"
+
+  secondary:
+    - path: web/app/checkout/page.tsx
+      anchor: "BUG_CHECKOUT_SWALLOWS_ERROR"
+      anchor_alternatives:
+        - "setPlacing(true)"
+        - "data-testid=\"place-order\""
+      lines: null
+      issue: >
+        The Place Order submit handler sets the loading state, awaits the fetch,
+        and only clears the loading state / surfaces a message on the success
+        path. A non-2xx response (and a thrown parse error on the HTML-ish 500
+        body) leaves the button disabled and spinning with nothing rendered, so
+        the customer sees no error at all.
+      correct_fix: >
+        Clear the loading state in a finally block, branch on response.ok, and
+        render the API's error message (or a generic failure) in an
+        error region with a stable data-testid.
+
+telemetry_signature:
+  trace: >
+    One trace_id per Place Order click. Expect: WEB click place-order ->
+    WEB fetch POST /api/checkout -> API request start -> API sql SELECT on
+    shop.coupons -> API business coupon_applied (attrs.uses 4/5) ->
+    API sql UPDATE shop.coupons SET uses=5 -> API error IntegrityError with
+    traceback pointing at api/app/routers/checkout.py -> WEB fetch 500 ->
+    WEB console.error (JSON parse) -> two further click place-order events
+    on later trace_ids with no successful order.
+  distinguishing: >
+    The winning checkout and the losing checkout share a session_id but have
+    different trace_ids and near-identical timestamps. That overlap is the
+    proof of concurrency; a robot that never induces two simultaneous
+    checkouts will see only the historical ghost run, never a live repro.
+
+repro:
+  persona: priya@example.com
+  password: password123
+  viewport: [1440, 900]
+  concurrency: 2
+  preconditions:
+    - "shop.coupons SAVE20 has uses=4, max_uses=5, active=true, not expired"
+    - "BUG_COUPON_TOCTOU enabled"
+    - "BUG_CHECKOUT_SWALLOWS_ERROR enabled"
+  steps:
+    - login
+    - add_item
+    - "apply_coupon SAVE20"
+    - "checkout x2 simultaneously"
+  expected_observation: >
+    Exactly one checkout returns 201 and creates an order; the other returns
+    500. In the browser the losing tab's Place Order button stays disabled and
+    spinning indefinitely.
+
+regression_test:
+  path: api/tests/test_coupon_race.py
+  kind: pytest
+  must_fail_before_fix: true
+  asserts:
+    - "Two concurrent POST /api/checkout with SAVE20 at uses=4/5 never both succeed"
+    - "The losing request returns 4xx with a domain error code, never 500"
+    - "shop.coupons.uses for SAVE20 ends at exactly 5, never 6"
+
+grading:
+  must_identify_file: api/app/routers/checkout.py
+  must_name_root_cause: "unlocked read-modify-write / TOCTOU on coupons.uses"
+  must_also_report_secondary: true
+  bonus:
+    - "Escalates that the frontend defect is a separate bug, not a symptom"
+    - "Notes that retries produced no duplicate charges (no order rows created)"

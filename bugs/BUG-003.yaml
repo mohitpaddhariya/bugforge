@@ -1,0 +1,119 @@
+id: BUG-003
+title: Order response renames total_cents to total; web renders $NaN
+ticket: 1044
+layer: contract
+class: contract-drift
+severity: medium
+flags:
+  BUG_TOTAL_FIELD_RENAME: true
+
+symptom:
+  user_visible: "Order total shows as $NaN on the order confirmation page and in order history"
+  http: "GET /api/orders and GET /api/orders/{id} -> 200, but the JSON key is `total` instead of `total_cents`"
+  backend_logs: false
+  frontend_logs: false
+  notes: >
+    No exception anywhere. The API returns 200, the web page renders, nothing
+    is logged at error level. Only the response *shape* differs. Neither side is
+    wrong in isolation — the serializer is internally consistent and the
+    component is internally consistent — so the bug only exists at the boundary.
+
+answer_sheet:
+  files:
+    - path: api/app/routers/orders.py
+      anchor: "flags.is_enabled(flags.BUG_TOTAL_FIELD_RENAME)"
+      anchor_alternatives:
+        - "def _serialize_order"
+        - "\"total\": order.total_cents"
+      lines: null   # null by design: written before the code. A later pass resolves
+                    # the anchor to concrete line numbers.
+      role: primary
+      why: >
+        The order serializer emits the key `total` (carrying the same integer
+        cents value) instead of the contract's `total_cents`. Every other money
+        field keeps its `_cents` suffix, which is what makes the drift look like
+        a careless rename rather than a unit change.
+
+  root_cause: >
+    A breaking rename of a response field. The API serialises the order total
+    under the key `total` while the web client reads `order.total_cents`. The
+    lookup yields undefined, undefined flows into the cents-to-dollars
+    formatting arithmetic, and (undefined / 100).toFixed(2) produces "NaN",
+    rendered as "$NaN". The value itself is never wrong — only the key is.
+    The shared contract is: money is always integer cents and every money field
+    name ends in _cents.
+
+  correct_fix: >
+    Restore the contract on the producing side: serialise the field as
+    `total_cents` in api/app/routers/orders.py so it matches every other money
+    field and the documented contract. Patching the web client to read `total`
+    would make the page render but leaves the API violating the contract for
+    every other consumer, and leaves the confirmation page and history page free
+    to drift apart again.
+
+  incorrect_fixes:
+    - "Changing web to read `total` (or `total ?? total_cents`) and leaving the API renamed"
+    - "Defaulting the missing value to 0 in the formatter — hides the drift and shows a wrong price"
+    - "Recomputing the total on the client from line items"
+    - "Converting the value to a float or a formatted string in the API response"
+
+  secondary:
+    - path: web/lib/format.ts
+      anchor: "formatCents"
+      anchor_alternatives:
+        - "toFixed(2)"
+        - "/ 100"
+      lines: null
+      issue: >
+        Hardening opportunity, not the bug: the cents formatter accepts
+        undefined/NaN silently and emits "$NaN". Guarding it (throw in dev,
+        render an em dash in prod) would have turned this into a loud failure.
+        Optional in the fix; must not be offered *instead* of the API fix.
+
+telemetry_signature:
+  trace: >
+    One trace_id for the order-detail navigation: WEB nav -> WEB fetch
+    GET /api/orders/{id} 200 -> API request 200 with a response-shape attr
+    listing top-level keys. The shape attribute contains `total` and does not
+    contain `total_cents`; comparing it against a healthy historical trace from
+    before the rename is the shortcut to the diagnosis.
+  distinguishing: >
+    Level is `info` everywhere — no error, no warn. A robot that filters
+    telemetry to level=error finds nothing and must fall back to response-shape
+    comparison or to reading both sides of the boundary.
+
+repro:
+  persona: priya@example.com
+  password: password123
+  viewport: [1440, 900]
+  concurrency: 1
+  preconditions:
+    - "BUG_TOTAL_FIELD_RENAME enabled"
+  steps:
+    - login
+    - add_item
+    - checkout
+    - "observe confirmation total"
+    - "navigate /orders"
+    - "observe total column for the new order"
+  expected_observation: >
+    The order total renders as "$NaN" on both the confirmation and the history
+    list. Per-line item prices render correctly, and the raw JSON from
+    GET /api/orders/{id} contains a correct integer under the key `total`.
+
+regression_test:
+  path: api/tests/test_order_contract.py
+  kind: pytest
+  must_fail_before_fix: true
+  asserts:
+    - "GET /api/orders/{id} response contains total_cents and does not contain total"
+    - "Every money key in the order payload ends in _cents and is an int"
+    - "GET /api/orders list items expose the same money keys as the detail payload"
+
+grading:
+  must_identify_file: api/app/routers/orders.py
+  must_name_root_cause: "response field renamed total_cents -> total; client reads total_cents -> undefined -> NaN"
+  must_fix_on_api_side: true
+  bonus:
+    - "Quotes the response-shape telemetry as the evidence"
+    - "Notes that no error was logged and explains why that is expected"

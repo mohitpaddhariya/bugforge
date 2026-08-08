@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Ticket queue{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1 data-testid="queue-title">Ticket queue</h1>
+  <p class="muted" data-testid="queue-summary">
+    {{ tickets|length }} ticket{{ '' if tickets|length == 1 else 's' }} · {{ open_count }} open
+  </p>
+</div>
+
+<table class="tickets" data-testid="ticket-table">
+  <thead>
+    <tr>
+      <th class="col-id">ID</th>
+      <th>Subject</th>
+      <th class="col-cust">Customer</th>
+      <th class="col-status">Status</th>
+      <th class="col-date">Opened</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for t in tickets %}
+    <tr data-testid="ticket-row-{{ t.id }}">
+      <td class="col-id mono">
+        <a href="/ticket/{{ t.id }}" data-testid="ticket-link-{{ t.id }}">#{{ t.id }}</a>
+      </td>
+      <td>
+        <a class="subject" href="/ticket/{{ t.id }}" data-testid="ticket-subject-{{ t.id }}">{{ t.subject }}</a>
+        <div class="snippet">{{ t.body[:96] }}{% if t.body|length > 96 %}…{% endif %}</div>
+      </td>
+      <td class="col-cust">
+        <div>{{ t.customer_name }}</div>
+        <div class="muted mono small">{{ t.customer_email }}</div>
+      </td>
+      <td class="col-status">
+        <span class="badge badge-{{ t.status }}" data-testid="ticket-status-{{ t.id }}">{{ t.status_label }}</span>
+      </td>
+      <td class="col-date mono small" data-testid="ticket-opened-{{ t.id }}">{{ t.opened_at_pretty }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

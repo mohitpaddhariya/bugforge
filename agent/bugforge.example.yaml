@@ -1,0 +1,28 @@
+# Copy to bugforge.yaml at the project root and edit.
+# The skill never talks to a concrete service — only to these four capabilities.
+# See skills/bug-triage/references/adapters.md for swapping drivers.
+
+tickets:
+  driver: supportdesk          # | github-issues | file
+  url: http://localhost:3001
+
+telemetry:
+  driver: bugforge             # | sentry
+  url: http://localhost:8001
+
+vcs:
+  driver: local                # | gitea | github   (start with local, no host needed)
+  # url: http://localhost:3002
+  # repo: bugforge/shopforge
+  # token: ${GITEA_TOKEN}
+  # base: main
+
+app:
+  url: http://localhost:3000
+  api_url: http://localhost:8000
+  repo_path: .
+  test_cmd: "docker compose exec -T api pytest -q"
+  # Sandbox only. Real systems have no bug switches — delete this in production.
+  control_plane: http://localhost:8000/api/debug
+
+runs_dir: .bugforge/runs

@@ -1,0 +1,119 @@
+id: BUG-002
+title: Invisible promo overlay eats the Place Order click on mobile widths
+ticket: 1043
+layer: frontend
+class: layout / hit-testing
+severity: high
+flags:
+  BUG_PROMO_OVERLAY: true
+
+symptom:
+  user_visible: "On phone widths, tapping Place Order does nothing at all — no spinner, no error"
+  http: "none — the request is never made"
+  backend_logs: false
+  frontend_logs: true
+  notes: >
+    This is the bug that justifies frontend telemetry existing. A backend-only
+    investigation finds literally nothing: no request row, no error, no SQL.
+    The only evidence is a web-side click event whose real hit target is the
+    overlay rather than the button.
+
+answer_sheet:
+  files:
+    - path: web/components/promo-banner.tsx
+      anchor: "BUG_PROMO_OVERLAY"
+      anchor_alternatives:
+        - "data-testid=\"promo-banner\""
+        - "promo-dismiss"
+        - "position: fixed"
+        - "z-"
+      lines: null   # null by design: written before the code. A later pass resolves
+                    # the anchor to concrete line numbers.
+      role: primary
+      why: >
+        When the flag is on, the banner's dismiss layer renders as a
+        position:fixed, fully transparent element with a high z-index whose box
+        extends over the bottom of the viewport below the 768px breakpoint. It
+        sits above the checkout summary, so the tap lands on the dismiss layer,
+        not on the button.
+    - path: web/app/checkout/page.tsx
+      anchor: "data-testid=\"place-order\""
+      lines: null
+      role: victim
+      why: >
+        The Place Order button itself is correct. It is simply occluded. Do not
+        patch this file — changing the button proves nothing and the overlay
+        will still eat clicks elsewhere.
+
+  root_cause: >
+    The promo banner's dismiss/backdrop layer is position:fixed with a higher
+    z-index than the checkout summary and no pointer-events:none. Its responsive
+    sizing is wrong: below the 768px breakpoint it is not constrained to the
+    banner strip and covers the region containing the Place Order button.
+    Because the layer is transparent, the occlusion is invisible; the click
+    dispatches normally but its target is the overlay, so no handler on the
+    button runs and no fetch is issued.
+
+  correct_fix: >
+    Constrain the dismiss layer so it can never cover page content: give the
+    overlay pointer-events:none (with pointer-events:auto restored on the small
+    dismiss button itself), or bound it to the banner's own box instead of the
+    viewport, or lower its z-index below the page content stack. The banner must
+    remain dismissable and the Place Order button must receive the click at
+    375x812 as well as at 1440x900.
+
+  incorrect_fixes:
+    - "Deleting the promo banner entirely"
+    - "Raising the Place Order button's z-index so it pokes through the overlay (leaves the overlay eating every other control)"
+    - "Adding a click handler to the overlay that forwards to Place Order"
+    - "Any change to api/ — the backend is not involved in this bug"
+
+  secondary: []
+
+telemetry_signature:
+  trace: >
+    One trace_id per tap, containing exactly one WEB click event and nothing
+    else. The click's attrs record the real hit target: selector path and
+    tag of the overlay element, listener_ran=false, and no subsequent
+    WEB fetch. Session meta shows viewport width < 768. Repeated near-identical
+    click traces a few seconds apart are the customer tapping again.
+  distinguishing: >
+    Zero api-side telemetry for the whole session's checkout attempts. The
+    absence of a `request` event paired with the presence of a `click` event is
+    the diagnosis: the click happened, the request never did.
+
+repro:
+  persona: mei@example.com
+  password: password123
+  viewport: [390, 844]
+  viewport_note: "Must be below the 768px breakpoint. At 1440x900 the bug does not reproduce."
+  concurrency: 1
+  preconditions:
+    - "BUG_PROMO_OVERLAY enabled"
+    - "Promo banner not already dismissed in this browser session"
+  steps:
+    - login
+    - add_item
+    - "navigate /checkout"
+    - "click place-order"
+  expected_observation: >
+    Nothing happens. No network request in the browser devtools/network log, no
+    change in button state, no error. Resizing to desktop width and clicking the
+    same button places the order successfully.
+
+regression_test:
+  path: web/tests/checkout-overlay.spec.ts
+  kind: browser
+  must_fail_before_fix: true
+  asserts:
+    - "At 390x844 on /checkout, elementFromPoint at the centre of [data-testid=place-order] is the button itself"
+    - "Clicking place-order at 390x844 issues exactly one POST /api/checkout"
+    - "The promo banner is still dismissable at both 390x844 and 1440x900"
+
+grading:
+  must_identify_file: web/components/promo-banner.tsx
+  must_name_root_cause: "transparent fixed-position overlay with higher z-index occludes the button below 768px"
+  must_reproduce_at_mobile_viewport: true
+  bonus:
+    - "States explicitly that backend telemetry is empty and explains why that is itself the clue"
+    - "Cites the recorded hit target from the click event rather than guessing"

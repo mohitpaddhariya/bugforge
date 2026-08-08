@@ -1,0 +1,120 @@
+/* supportdesk — internal helpdesk styling.
+   Plain CSS, no build step, no external fonts. Looks like a tool, not a product. */
+
+:root {
+  --bg: #f4f5f7;
+  --panel: #ffffff;
+  --ink: #1f2328;
+  --muted: #6b7280;
+  --line: #d8dbe0;
+  --accent: #2f5d9e;
+  --open: #b45309;
+  --open-bg: #fdf0d9;
+  --pending: #1f6f8b;
+  --pending-bg: #e0f0f4;
+  --closed: #4b5563;
+  --closed-bg: #e8eaed;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+.wrap { max-width: 980px; margin: 0 auto; padding: 0 20px; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.small { font-size: 12px; }
+.muted { color: var(--muted); }
+
+/* topbar */
+.topbar { background: #232a33; color: #e8eaed; border-bottom: 1px solid #11151a; }
+.topbar-inner { display: flex; align-items: center; justify-content: space-between; height: 48px; }
+.brand { display: flex; align-items: center; gap: 9px; color: #e8eaed; text-decoration: none; }
+.brand-mark {
+  background: var(--accent); color: #fff; font-weight: 700; font-size: 12px;
+  border-radius: 3px; padding: 3px 6px; letter-spacing: .5px;
+}
+.brand-text { font-size: 14px; }
+.brand-text b { font-weight: 600; }
+.topnav a { color: #aeb6c0; text-decoration: none; margin-left: 18px; font-size: 13px; }
+.topnav a:hover { color: #fff; text-decoration: underline; }
+
+.main { padding: 26px 20px 48px; }
+
+/* headings */
+.page-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.page-head h1 { font-size: 19px; font-weight: 600; margin: 0; }
+.page-head p { margin: 0; font-size: 13px; }
+.ticket-num { color: var(--muted); font-weight: 400; margin-right: 6px; }
+
+.back { display: inline-block; margin-bottom: 14px; font-size: 13px; color: var(--accent); text-decoration: none; }
+.back:hover { text-decoration: underline; }
+
+/* queue table */
+table.tickets {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+}
+table.tickets th {
+  text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .6px;
+  color: var(--muted); font-weight: 600;
+  padding: 9px 12px; background: #eceef1; border-bottom: 1px solid var(--line);
+}
+table.tickets td { padding: 11px 12px; border-bottom: 1px solid #eceef1; vertical-align: top; }
+table.tickets tr:last-child td { border-bottom: none; }
+table.tickets tbody tr:hover { background: #fafbfc; }
+
+.col-id { width: 72px; }
+.col-cust { width: 190px; }
+.col-status { width: 96px; }
+.col-date { width: 148px; white-space: nowrap; color: var(--muted); }
+
+a { color: var(--accent); }
+a.subject { font-weight: 600; text-decoration: none; }
+a.subject:hover { text-decoration: underline; }
+.snippet { color: var(--muted); font-size: 12px; margin-top: 3px; }
+
+/* badges */
+.badge {
+  display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px;
+  border-radius: 10px; text-transform: uppercase; letter-spacing: .4px;
+}
+.badge-open { color: var(--open); background: var(--open-bg); }
+.badge-pending { color: var(--pending); background: var(--pending-bg); }
+.badge-closed { color: var(--closed); background: var(--closed-bg); }
+
+/* detail */
+.detail { display: flex; gap: 18px; align-items: flex-start; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; }
+.card-head {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted);
+  font-weight: 600; padding: 9px 14px; background: #eceef1; border-bottom: 1px solid var(--line);
+}
+.body-card { flex: 1 1 auto; min-width: 0; }
+.body { padding: 6px 16px 14px; }
+.body p { margin: 12px 0; white-space: pre-wrap; }
+.meta-card { flex: 0 0 258px; }
+
+dl.meta { margin: 0; padding: 12px 14px; }
+dl.meta dt { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin-top: 10px; }
+dl.meta dt:first-child { margin-top: 0; }
+dl.meta dd { margin: 2px 0 0; word-break: break-word; }
+
+.jsonlink { display: block; padding: 10px 14px; border-top: 1px solid var(--line); font-size: 12px; }
+
+/* footer */
+.footer { color: var(--muted); font-size: 12px; padding: 14px 0 26px; }
+
+@media (max-width: 760px) {
+  .detail { flex-direction: column; }
+  .meta-card { flex: 1 1 auto; width: 100%; }
+  .col-cust, .col-date { display: none; }
+}

@@ -1,0 +1,165 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --promo-height: 52px;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: #ffffff;
+  color: #111827;
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------------------------------------------------------------------------
+ * Promo banner
+ *
+ * `.promo-shell` is the visible bar. `.promo-layer` is the transparent
+ * hit-area that sits above the bar so the whole strip is clickable.
+ * Normally it is sized to the bar. `.promo-layer--wide` is the mobile
+ * treatment.
+ * ------------------------------------------------------------------------ */
+
+.promo-shell {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  min-height: var(--promo-height);
+}
+
+.promo-spacer {
+  height: var(--promo-height);
+}
+
+.promo-layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--promo-height);
+  z-index: 9998;
+  background: transparent;
+  border: 0;
+  outline: 0;
+}
+
+@media (max-width: 767px) {
+  .promo-layer--wide {
+    top: auto;
+    bottom: 0;
+    height: 96px;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Checkout action bar. On narrow viewports the Place Order button is docked
+ * to the bottom of the screen; on wide viewports it sits inline in the
+ * summary card.
+ * ------------------------------------------------------------------------ */
+
+.checkout-actions {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  background: #ffffff;
+  border-top: 1px solid #e5e7eb;
+  padding: 12px 16px;
+  box-shadow: 0 -1px 6px rgba(17, 24, 39, 0.06);
+}
+
+.checkout-actions-spacer {
+  height: 108px;
+}
+
+@media (min-width: 768px) {
+  .checkout-actions {
+    position: static;
+    border-top: 0;
+    padding: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  .checkout-actions-spacer {
+    height: 0;
+  }
+}
+
+/* --------------------------------------------------------------------------- */
+
+.card {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.field {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 14px;
+  background: #ffffff;
+}
+
+.field:focus {
+  outline: 2px solid #1d4ed8;
+  outline-offset: 1px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 9px 16px;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
+.btn-secondary {
+  background: #ffffff;
+  color: #111827;
+  border-color: #d1d5db;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

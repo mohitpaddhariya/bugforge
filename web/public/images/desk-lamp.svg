@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300" role="img" aria-label="Folding Desk Lamp">
+  <rect width="400" height="300" fill="#3b2f2f"/>
+  <circle cx="196" cy="135" r="106" fill="#fbbf24" opacity="0.18"/>
+  <rect x="56" y="196" width="166" height="66" rx="10" fill="#fbbf24" opacity="0.28"/>
+  <text x="24" y="248" font-family="system-ui, sans-serif" font-size="22" font-weight="600" fill="#fbbf24">Folding</text>
+  <text x="24" y="276" font-family="system-ui, sans-serif" font-size="22" font-weight="600" fill="#fbbf24">Desk Lamp</text>
+</svg>

@@ -1,0 +1,189 @@
+name: bugforge
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: bugforge-db
+    environment:
+      POSTGRES_DB: bugforge
+      POSTGRES_USER: bugforge
+      POSTGRES_PASSWORD: bugforge
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bugforge -d bugforge"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    restart: unless-stopped
+
+  collector:
+    build:
+      context: ./collector
+      dockerfile: Dockerfile
+    container_name: bugforge-collector
+    environment:
+      DATABASE_URL: postgresql+psycopg2://bugforge:bugforge@db:5432/bugforge
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./collector/app:/srv/app
+      - ./scripts:/srv/scripts
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import socket,sys; s=socket.create_connection(('127.0.0.1',8001),2); s.close()"
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload --reload-dir /srv/app
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: bugforge-api
+    environment:
+      DATABASE_URL: postgresql+psycopg2://bugforge:bugforge@db:5432/bugforge
+      COLLECTOR_URL: http://collector:8001
+      WEB_ORIGIN: http://localhost:3000
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./api/app:/srv/app
+      - ./api/tests:/srv/tests
+      - ./scripts:/srv/scripts
+      - ./bugs:/srv/bugs
+    depends_on:
+      db:
+        condition: service_healthy
+      collector:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import socket,sys; s=socket.create_connection(('127.0.0.1',8000),2); s.close()"
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /srv/app
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: bugforge-web
+    environment:
+      NODE_ENV: development
+      NEXT_TELEMETRY_DISABLED: "1"
+      WATCHPACK_POLLING: "true"
+      # Browser-facing (must be reachable from the host browser)
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_COLLECTOR_URL: http://localhost:8001
+      # Server-side (container network)
+      API_INTERNAL_URL: http://api:8000
+      COLLECTOR_INTERNAL_URL: http://collector:8001
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./web:/srv
+      - web_node_modules:/srv/node_modules
+      - web_next_cache:/srv/.next
+    depends_on:
+      api:
+        condition: service_healthy
+      collector:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "require('http').get('http://127.0.0.1:3000/login', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"
+      interval: 5s
+      timeout: 10s
+      retries: 40
+      start_period: 30s
+    command: npm run dev
+    restart: unless-stopped
+
+  supportdesk:
+    build:
+      context: ./supportdesk
+      dockerfile: Dockerfile
+    container_name: bugforge-supportdesk
+    environment:
+      DATABASE_URL: postgresql+psycopg2://bugforge:bugforge@db:5432/bugforge
+      WEB_URL: http://localhost:3000
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./supportdesk/app:/srv/app
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:3001/healthz', timeout=3).status == 200 else 1)"
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    command: uvicorn app.main:app --host 0.0.0.0 --port 3001 --reload --reload-dir /srv/app
+    restart: unless-stopped
+
+  gitea:
+    image: gitea/gitea:1.22
+    container_name: bugforge-gitea
+    environment:
+      USER_UID: "1000"
+      USER_GID: "1000"
+      GITEA__server__ROOT_URL: http://localhost:3002/
+      GITEA__server__HTTP_PORT: "3000"
+      GITEA__server__SSH_PORT: "2222"
+      GITEA__server__SSH_LISTEN_PORT: "22"
+      GITEA__database__DB_TYPE: sqlite3
+      GITEA__security__INSTALL_LOCK: "true"
+      GITEA__service__DISABLE_REGISTRATION: "false"
+    ports:
+      - "3002:3000"
+      - "2222:22"
+    volumes:
+      - gitea_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/api/healthz || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  db_data:
+  gitea_data:
+  web_node_modules:
+  web_next_cache:

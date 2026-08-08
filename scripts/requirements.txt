@@ -1,0 +1,18 @@
+# Dependencies for scripts/ (seed, reset, ghost runs).
+#
+# These scripts normally run *inside the api container*, which already has all
+# of this installed from api/requirements.txt — the pins below are identical on
+# purpose, so `pip install -r scripts/requirements.txt` in a bare virtualenv
+# reproduces the same behaviour without pulling in FastAPI.
+#
+#   docker compose exec -T api python /srv/scripts/reset.py
+#
+# The scripts import `app.db`, `app.models`, `app.flags` and `app.auth` from the
+# api service rather than redefining any tables, so running them outside that
+# container also needs the api package importable (PYTHONPATH=/path/to/api).
+
+SQLAlchemy==2.0.36
+psycopg2-binary==2.9.10
+passlib==1.7.4
+bcrypt==4.0.1
+httpx==0.28.1

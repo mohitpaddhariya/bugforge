@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300" role="img" aria-label="Everyday Merino Tee">
+  <rect width="400" height="300" fill="#2f3b2f"/>
+  <circle cx="251" cy="173" r="81" fill="#a3e635" opacity="0.18"/>
+  <rect x="51" y="171" width="191" height="61" rx="10" fill="#a3e635" opacity="0.28"/>
+  <text x="24" y="248" font-family="system-ui, sans-serif" font-size="22" font-weight="600" fill="#a3e635">Everyday</text>
+  <text x="24" y="276" font-family="system-ui, sans-serif" font-size="22" font-weight="600" fill="#a3e635">Merino Tee</text>
+</svg>

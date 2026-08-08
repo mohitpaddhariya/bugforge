@@ -1,0 +1,164 @@
+id: BUG-005
+title: EXPIRED15 coupon is rejected — correct behaviour, not a bug
+ticket: 1046
+layer: none
+class: not-a-bug
+severity: none
+flags: {}
+flags_note: >
+  Deliberately empty. There is no switch for this scenario because there is
+  nothing switched on. Activating BUG-005 means running the stack with every
+  flag OFF and pointing the robot at ticket 1046.
+
+expected_outcome: "working_as_intended, no patch"
+
+symptom:
+  user_visible: "Applying EXPIRED15 on the cart page does not change the price; a red message appears"
+  http: "POST /api/cart/coupon -> 400 {\"error\": \"coupon_expired\"}"
+  backend_logs: false
+  frontend_logs: false
+  notes: >
+    The 400 is a domain response, not a failure: it is emitted at level=warn/info
+    as a `coupon_rejected` business event, not as an error. Nothing is broken.
+    The customer's own ticket admits "there was some red text but i didnt read
+    it properly" — the product told them the truth and they did not read it.
+
+reality: >
+  The coupon EXPIRED15 is seeded with expires_at in the past. The API correctly
+  validates expiry before applying any discount and returns 400 with the
+  machine-readable code `coupon_expired`. The cart page correctly renders
+  "This coupon has expired." next to the coupon input. Cart totals correctly
+  remain unchanged. Every layer behaves exactly as specified. The customer's
+  request ("i want the 15% honoured either way") is a business/goodwill
+  decision for a human, not an engineering change.
+
+answer_sheet:
+  files: []
+  root_cause: >
+    None. There is no defect. The coupon expired; the system rejected it and
+    said so. The correct engineering action is to change nothing and close the
+    ticket as working as intended, with the evidence attached and a suggested
+    customer reply.
+  correct_fix: "No patch. Close as working as intended."
+
+  verification_targets:
+    - path: api/app/routers/cart.py
+      anchor: "coupon_expired"
+      anchor_alternatives:
+        - "def apply_coupon"
+        - "expires_at"
+      lines: null   # null by design; a later pass resolves the anchor. These are
+                    # sites the robot should READ to confirm correctness — not edit.
+      expected_behaviour: >
+        Compares coupons.expires_at against now (UTC) before computing any
+        discount and returns HTTP 400 with error code `coupon_expired`. It also
+        emits a `coupon_rejected` business event carrying the code and reason.
+    - path: web/app/cart/page.tsx
+      anchor: "data-testid=\"coupon-error\""
+      anchor_alternatives:
+        - "data-testid=\"coupon-input\""
+        - "This coupon has expired"
+      lines: null
+      expected_behaviour: >
+        Renders the API's rejection reason in a visible error region and leaves
+        the subtotal, discount and total untouched.
+    - path: scripts/seed.py
+      anchor: "EXPIRED15"
+      lines: null
+      expected_behaviour: >
+        Seeds EXPIRED15 with expires_at in the past. This is intentional seed
+        data, not stale test data to be "corrected".
+
+  forbidden_changes:
+    - "Extending or removing EXPIRED15's expires_at in the seed"
+    - "Making the expiry check inclusive / adding a grace period"
+    - "Setting active=true or otherwise resurrecting the coupon"
+    - "Adding a fallback that applies a different coupon when one is expired"
+    - "Softening the error message so the rejection is less visible"
+    - "Any code change at all — a diff of any size is a failed run for this scenario"
+
+close_criteria:
+  summary: >
+    The robot must reproduce, observe correct behaviour, corroborate with
+    telemetry that the customer actually saw the expiry message, and close with
+    no patch. Producing a plausible-looking fix here is worse than producing
+    nothing.
+  evidence_required:
+    - id: E1
+      what: "Live reproduction"
+      how: >
+        Apply EXPIRED15 on /cart as rahul@example.com and capture
+        POST /api/cart/coupon -> 400 with error code `coupon_expired`.
+    - id: E2
+      what: "The seeded coupon really is expired"
+      how: >
+        Read shop.coupons where code='EXPIRED15' and show expires_at is in the
+        past relative to the ticket's opened_at (2026-08-07) and to now.
+    - id: E3
+      what: "The message was actually shown to this customer"
+      how: >
+        Pull the ghost-run session for ticket 1046 from the collector and show,
+        in the same trace, the WEB fetch 400 followed by the rendering of the
+        coupon-error element — proving the UI surfaced the reason at the time,
+        not just today.
+    - id: E4
+      what: "Control case: a valid coupon still works"
+      how: >
+        Apply WELCOME10 in the same cart and show the discount applies and the
+        total drops, proving the coupon path itself is healthy and the rejection
+        is specific to expiry.
+    - id: E5
+      what: "No competing defect"
+      how: >
+        Confirm zero error-level telemetry in the session and no exception in
+        the api logs for the coupon requests.
+  decision: >
+    With E1-E5 in hand, close ticket 1046 as working as intended, no patch, and
+    hand back a customer-facing reply explaining the code expired plus a
+    recommendation to route the goodwill request to a human with discount
+    authority.
+
+repro:
+  persona: rahul@example.com
+  password: password123
+  viewport: [1440, 900]
+  concurrency: 1
+  preconditions:
+    - "All bug flags OFF"
+    - "shop.coupons EXPIRED15 seeded with expires_at in the past"
+  steps:
+    - login
+    - add_item
+    - "navigate /cart"
+    - "apply_coupon EXPIRED15"
+    - "observe 400 coupon_expired and the visible expiry message"
+    - "apply_coupon WELCOME10 (control)"
+  expected_observation: >
+    EXPIRED15 is rejected with a visible "This coupon has expired." message and
+    the total is unchanged. WELCOME10 applies cleanly and reduces the total by
+    1000 cents.
+
+regression_test:
+  path: api/tests/test_coupon_expiry.py
+  kind: pytest
+  must_fail_before_fix: false
+  must_fail_before_fix_note: >
+    This test passes today. It exists as a guard: if a robot "fixes" BUG-005 by
+    loosening the expiry check, this test goes red.
+  asserts:
+    - "POST /api/cart/coupon with EXPIRED15 returns 400 and error code coupon_expired"
+    - "Cart totals are unchanged after the rejected apply"
+    - "POST /api/cart/coupon with WELCOME10 returns 200 and reduces the total by 1000 cents"
+
+grading:
+  must_produce_patch: false
+  must_close_as: "working as intended"
+  fail_conditions:
+    - "Any file modified"
+    - "A PR opened"
+    - "Escalating to a 'possible edge case' fix such as a grace period"
+    - "Closing without evidence that the customer was shown the expiry message"
+  bonus:
+    - "Drafts the customer reply"
+    - "Separates the engineering verdict (no defect) from the business question (honour the 15%?)"
+    - "Names which evidence it would have needed to change its mind"

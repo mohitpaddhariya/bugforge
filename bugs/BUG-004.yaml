@@ -1,0 +1,120 @@
+id: BUG-004
+title: Missing ownership check on GET /api/orders/{id} leaks other users' orders (IDOR)
+ticket: 1045
+layer: backend
+class: authorization / security
+severity: critical
+severity_note: >
+  The ticket reads like a cosmetic mix-up. It is an unauthenticated-to-you data
+  exposure of another customer's order contents and shipping details. Escalating
+  the severity above what the customer implied is part of what this bug tests.
+flags:
+  BUG_ORDER_IDOR: true
+
+symptom:
+  user_visible: "Opening an order shows someone else's items (a green jacket the customer never bought)"
+  http: "GET /api/orders/{id} -> 200 for an order belonging to a different user (should be 404)"
+  backend_logs: false
+  frontend_logs: false
+  notes: >
+    No error is raised and no alarm is tripped: the request succeeds, which is
+    exactly the problem. The customer's own wording contains no security
+    language at all.
+
+answer_sheet:
+  files:
+    - path: api/app/routers/orders.py
+      anchor: "flags.is_enabled(flags.BUG_ORDER_IDOR)"
+      anchor_alternatives:
+        - "def get_order"
+        - "Order.id == order_id"
+        - "db.get(Order, order_id)"
+      lines: null   # null by design: written before the code. A later pass resolves
+                    # the anchor to concrete line numbers.
+      role: primary
+      why: >
+        The detail handler loads the order by primary key only. The buggy branch
+        omits the `Order.user_id == current_user.id` predicate that the healthy
+        branch applies, so any authenticated session can read any order id.
+
+  root_cause: >
+    Broken object-level authorization (IDOR). GET /api/orders/{id} resolves the
+    order by primary key with no ownership predicate and no post-fetch check
+    against the session's user. Authentication is verified (a valid sf_session
+    cookie is required) but authorization is not: the handler never asks whether
+    this order belongs to this user. Order ids are sequential integers, so the
+    whole order table is enumerable one id at a time.
+
+  correct_fix: >
+    Scope the lookup to the caller: add `AND user_id = :current_user_id` to the
+    query (or fetch then compare and reject). Return 404 rather than 403 for an
+    order the caller does not own, so the endpoint does not confirm which ids
+    exist. Apply the same scoping to any sibling route that resolves an order,
+    order item, or cart by id.
+
+  incorrect_fixes:
+    - "Returning 403 with a body that reveals the order exists or who owns it"
+    - "Hiding the other user's details in the web UI while the API still returns them"
+    - "Switching order ids to UUIDs and leaving the ownership check absent (obscurity, not authorization)"
+    - "Adding rate limiting instead of an ownership check"
+
+  secondary:
+    - path: api/app/routers/orders.py
+      anchor: "def list_orders"
+      lines: null
+      issue: >
+        Verification target, not a second defect: the list endpoint is correctly
+        scoped to the current user. A fix must not regress it, and the
+        investigation should confirm that only the detail route is unscoped.
+
+telemetry_signature:
+  trace: >
+    WEB nav /orders/{id} -> WEB fetch GET /api/orders/{id} 200 -> API request
+    200 with user_id = the caller. The SQL event for the detail query shows a
+    WHERE clause on the primary key only. Joining the API request's user_id
+    against the returned order's owner is what exposes the leak: they differ.
+  distinguishing: >
+    Everything is level=info and status=200. The evidence is a mismatch between
+    the session's user_id and the order's user_id inside a successful request,
+    not an error anywhere.
+
+repro:
+  persona: arjun@example.com
+  password: password123
+  other_persona: priya@example.com
+  viewport: [1440, 900]
+  concurrency: 1
+  preconditions:
+    - "BUG_ORDER_IDOR enabled"
+    - "At least one seeded order belongs to priya and one to arjun"
+  steps:
+    - "login as arjun@example.com"
+    - "navigate /orders and note an owned order id"
+    - "request GET /api/orders/{id_belonging_to_priya}"
+    - "observe 200 with priya's line items"
+  expected_observation: >
+    A 200 response containing another user's order items and totals. With the
+    flag off the same request returns 404.
+
+regression_test:
+  path: api/tests/test_order_authorization.py
+  kind: pytest
+  must_fail_before_fix: true
+  asserts:
+    - "A session for user A requesting an order owned by user B receives 404"
+    - "The 404 body reveals nothing about the order's existence or owner"
+    - "A session for user A requesting its own order still receives 200"
+    - "GET /api/orders never returns an order belonging to another user"
+
+grading:
+  must_identify_file: api/app/routers/orders.py
+  must_name_root_cause: "missing ownership predicate (user_id) on the order-by-id lookup — IDOR"
+  must_escalate_severity: true
+  must_escalate_severity_note: >
+    The PR/report must state that this is a security issue and raise the
+    severity above the customer's framing, even though the ticket describes it
+    as a cosmetic mix-up.
+  bonus:
+    - "Chooses 404 over 403 and explains the enumeration reasoning"
+    - "Audits sibling routes for the same missing scope"
+    - "Notes the exposure window (which orders were reachable) for disclosure purposes"

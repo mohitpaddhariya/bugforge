@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}#{{ ticket.id }} {{ ticket.subject }}{% endblock %}
+
+{% block content %}
+<a class="back" href="/" data-testid="back-to-queue">&larr; back to queue</a>
+
+<div class="page-head">
+  <h1 data-testid="ticket-detail-subject">
+    <span class="mono ticket-num">#{{ ticket.id }}</span>
+    {{ ticket.subject }}
+  </h1>
+  <span class="badge badge-{{ ticket.status }}" data-testid="ticket-detail-status">{{ ticket.status_label }}</span>
+</div>
+
+<div class="detail">
+  <section class="card body-card">
+    <div class="card-head">Customer message</div>
+    <div class="body" data-testid="ticket-detail-body">
+      {% for p in ticket.paragraphs %}
+      <p>{{ p }}</p>
+      {% endfor %}
+    </div>
+  </section>
+
+  <aside class="card meta-card">
+    <div class="card-head">Details</div>
+    <dl class="meta" data-testid="ticket-detail-meta">
+      <dt>Customer</dt>
+      <dd data-testid="ticket-detail-customer">{{ ticket.customer_name }}</dd>
+
+      <dt>Email</dt>
+      <dd class="mono" data-testid="ticket-detail-email">{{ ticket.customer_email }}</dd>
+
+      <dt>Opened</dt>
+      <dd class="mono" data-testid="ticket-detail-opened">{{ ticket.opened_at_pretty }}</dd>
+
+      <dt>Browser</dt>
+      <dd data-testid="ticket-detail-browser">{{ ticket.browser }}</dd>
+
+      <dt>Device</dt>
+      <dd data-testid="ticket-detail-device">{{ ticket.device }}</dd>
+    </dl>
+    <a class="jsonlink mono" href="/api/tickets/{{ ticket.id }}" data-testid="ticket-detail-json">/api/tickets/{{ ticket.id }}</a>
+  </aside>
+</div>
+{% endblock %}

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300" role="img" aria-label="Aurora Wireless Headphones">
+  <rect width="400" height="300" fill="#1f2937"/>
+  <circle cx="150" cy="137" r="100" fill="#38bdf8" opacity="0.18"/>
+  <rect x="70" y="190" width="150" height="40" rx="10" fill="#38bdf8" opacity="0.28"/>
+  <text x="24" y="248" font-family="system-ui, sans-serif" font-size="22" font-weight="600" fill="#38bdf8">Aurora</text>
+  <text x="24" y="276" font-family="system-ui, sans-serif" font-size="22" font-weight="600" fill="#38bdf8">Wireless Headphones</text>
+</svg>

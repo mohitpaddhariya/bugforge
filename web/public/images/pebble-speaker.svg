@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300" role="img" aria-label="Pebble Bluetooth Speaker">
+  <rect width="400" height="300" fill="#1f2937"/>
+  <circle cx="178" cy="164" r="88" fill="#38bdf8" opacity="0.18"/>
+  <rect x="78" y="178" width="158" height="78" rx="10" fill="#38bdf8" opacity="0.28"/>
+  <text x="24" y="248" font-family="system-ui, sans-serif" font-size="22" font-weight="600" fill="#38bdf8">Pebble</text>
+  <text x="24" y="276" font-family="system-ui, sans-serif" font-size="22" font-weight="600" fill="#38bdf8">Bluetooth Speaker</text>
+</svg>

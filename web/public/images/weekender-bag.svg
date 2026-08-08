@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300" role="img" aria-label="Canvas Weekender Bag">
+  <rect width="400" height="300" fill="#2f3b2f"/>
+  <circle cx="137" cy="218" r="87" fill="#a3e635" opacity="0.18"/>
+  <rect x="57" y="177" width="197" height="87" rx="10" fill="#a3e635" opacity="0.28"/>
+  <text x="24" y="248" font-family="system-ui, sans-serif" font-size="22" font-weight="600" fill="#a3e635">Canvas</text>
+  <text x="24" y="276" font-family="system-ui, sans-serif" font-size="22" font-weight="600" fill="#a3e635">Weekender Bag</text>
+</svg>
