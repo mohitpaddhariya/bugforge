@@ -1,5 +1,7 @@
 # bugforge
 
+![bugforge — ticket in, verified PR out](docs/images/hero.png)
+
 **A fake online store with hidden bugs, and a robot that fixes them.**
 
 Give the robot a customer complaint. It looks up what actually happened, reproduces
@@ -55,8 +57,21 @@ wrong, the fixing doesn't matter.
 
 ## Stack
 
-Next.js · FastAPI · Postgres · browser-use + Playwright · Gitea · Docker Compose
+Next.js · FastAPI · Postgres · Playwright · Gitea · Docker Compose
+
+Reproductions are deterministic Playwright scripts. `bf repro explore` can use
+browser-use to draft one from a plain-English goal, but it is optional and was not
+used for the recorded run — without it the command scaffolds the script instead.
 
 ## Docs
 
 - [`docs/01-store-spec.md`](docs/01-store-spec.md) — the store: architecture, data model, telemetry contract, bug catalog
+- [`docs/03-agent-spec.md`](docs/03-agent-spec.md) — the agent: why it is a skill + CLI, and how it stays harness-agnostic
+- [`docs/05-submission.md`](docs/05-submission.md) — what was built, what works, what does not
+- [`skills/bug-triage/SKILL.md`](skills/bug-triage/SKILL.md) — the skill itself
+
+## Example output
+
+[PR #1](https://github.com/mohitpaddhariya/bugforge/pull/1) — ticket #1042 triaged end
+to end: root cause with file and line, the evidence timeline, before/after recordings,
+and the reproduction script so a reviewer can run it themselves.

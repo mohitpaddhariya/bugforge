@@ -54,27 +54,22 @@ def _fail(reason: str, message: str, status: int = 400, **attrs) -> ApiError:
 
 
 def _redeem_coupon(db: DbSession, coupon: Coupon) -> None:
-    """Increment ``coupons.uses``. **BUG-001 is the branch below.**
+    """Increment ``coupons.uses`` under a row lock.
 
     The guard that decided this coupon was redeemable ran at the top of the
     request (``validate_coupon``) — that is the time of check. This is the time
-    of use. Everything hinges on whether anything held a lock in between.
-    """
-    if flags.is_enabled(flags.BUG_COUPON_TOCTOU):
-        # ── BUG-001 (BUG_COUPON_TOCTOU) ────────────────────────────────────
-        # Read-modify-write on coupons.uses with no row-level lock. Two
-        # concurrent checkouts both passed a guard that read uses=4 of 5, and
-        # both arrive here. Postgres serialises the two UPDATEs on the row
-        # lock; the loser re-evaluates uses+1 against the winner's committed 5,
-        # writes 6, and violates CHECK (uses <= max_uses) -> IntegrityError
-        # -> HTTP 500. Correct fix: the `else` branch below.
-        db.execute(
-            update(Coupon).where(Coupon.id == coupon.id).values(uses=Coupon.uses + 1)
-        )
-        return
+    of use. Everything hinges on whether anything held a lock in between, so
+    this function takes one.
 
-    # Correct path: take the row lock first, then re-check the guard against
-    # the value nobody else can be holding.
+    Fixes #1042. Previously this had an unlocked read-modify-write path: two
+    concurrent checkouts both passed a guard that read ``uses=4`` of 5 and both
+    arrived here, so the loser wrote 6 and violated
+    ``CHECK (uses <= max_uses)`` — an IntegrityError surfacing as HTTP 500. The
+    invariant is now enforced by the application rather than by the constraint,
+    and a losing checkout gets a clean rejection instead of a server error.
+    """
+    # Take the row lock first, then re-check the guard against the value
+    # nobody else can be holding.
     #
     # ``populate_existing`` is load-bearing, not style. This Session already has
     # the Coupon in its identity map from the time-of-check read, and by default
