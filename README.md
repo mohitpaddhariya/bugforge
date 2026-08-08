@@ -57,7 +57,11 @@ wrong, the fixing doesn't matter.
 
 ## Stack
 
-Next.js · FastAPI · Postgres · browser-use + Playwright · Gitea · Docker Compose
+Next.js · FastAPI · Postgres · Playwright · Gitea · Docker Compose
+
+Reproductions are deterministic Playwright scripts. `bf repro explore` can use
+browser-use to draft one from a plain-English goal, but it is optional and was not
+used for the recorded run — without it the command scaffolds the script instead.
 
 ## Docs
 
