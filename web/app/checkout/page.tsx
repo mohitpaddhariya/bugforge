@@ -95,13 +95,11 @@ export default function CheckoutPage() {
     setError(null)
     setSubmitting(true)
 
-    if (flags.BUG_CHECKOUT_SWALLOWS_ERROR === true) {
-      const order = await checkout(payload())
-      setSubmitting(false)
-      router.push(`/orders/${order.id}`)
-      return
-    }
-
+    // Fixes #1042 (secondary). This used to have a branch that awaited the
+    // request without a catch, so a non-2xx response left `submitting` true
+    // forever: the button stayed grey and spinning with no error shown. That
+    // is why the ticket said "spins" rather than "error", and why the customer
+    // clicked Place Order three more times.
     try {
       const order = await checkout(payload())
       router.push(`/orders/${order.id}`)
